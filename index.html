@@ -161,6 +161,10 @@ input,textarea{font:inherit;font-size:17px;color:var(--ink)}
 .setup{margin-top:24px}
 .inp{display:block;width:100%;height:50px;border:1.5px solid var(--line);border-radius:14px;background:var(--surface-2);padding:0 14px;margin-bottom:16px;outline:none}
 .inp:focus{border-color:var(--ink)}
+.paste-row{display:flex;gap:8px;margin-bottom:16px}
+.paste-row .inp{margin-bottom:0;flex:1;min-width:0}
+.paste{flex:none;height:50px;padding:0 16px;border-radius:14px;background:var(--ink);color:var(--bg);font-size:16px;font-weight:700}
+.hint{margin:-4px 0 18px}
 .primary{display:block;width:100%;height:52px;border-radius:15px;background:var(--ink);color:var(--bg);font-size:17px;font-weight:700;text-align:center}
 .setup .row2{display:flex;gap:10px}
 .setup .row2 button{flex:1}
@@ -425,12 +429,14 @@ function viewStats(){
   <button class="settings-btn" id="settingsBtn">Connection settings</button>`;
 }
 function viewSetup(){
+  const draft=store.get('todo.draft',{url:cfg?cfg.url:'',key:cfg?cfg.key:''});
   return head(cfg?'Connection settings':'Connect your Sheet','Paste the web app URL and app key from Apps Script. You only need to do this once on this phone.')+
   `<div class="card setup">
     <label class="flabel" for="sUrl">Web app URL</label>
-    <input class="inp" id="sUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(cfg?cfg.url:'')}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="paste-row"><input class="inp" id="sUrl" type="url" placeholder="Paste your URL here" value="${esc(draft.url)}" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="paste" data-paste="sUrl">Paste</button></div>
     <label class="flabel" for="sKey">App key</label>
-    <input class="inp" id="sKey" value="${esc(cfg?cfg.key:'')}" autocapitalize="off" autocorrect="off" spellcheck="false">
+    <div class="paste-row"><input class="inp" id="sKey" placeholder="Paste your key here" value="${esc(draft.key)}" autocapitalize="off" autocorrect="off" spellcheck="false"><button class="paste" data-paste="sKey">Paste</button></div>
+    <p class="sub hint">Copy one, come back and tap Paste, then do the same for the other. What you paste is kept if you switch apps.</p>
     <div class="row2">${cfg?'<button class="secondary" id="sCancel">Cancel</button>':''}<button class="primary" id="sGo">Connect</button></div>
     <p class="sub" id="sMsg" role="status"></p>
   </div>`;
@@ -451,7 +457,7 @@ async function connect(){
   if(!key){msg('Paste your app key.');return}
   msg('Connecting…');
   const prev=cfg;cfg={url,key};
-  try{tasks=await api('list');store.set('todo.cfg',cfg);save();setupMode=false;render();toast('Connected to your Sheet')}
+  try{tasks=await api('list');store.set('todo.cfg',cfg);store.set('todo.draft',{url:'',key:''});save();setupMode=false;render();toast('Connected to your Sheet')}
   catch(e){cfg=prev;msg('Couldn’t connect. '+e.message)}
 }
 
@@ -553,17 +559,22 @@ document.addEventListener('click',e=>{
   if((el=g('[data-due]'))){form.due=el.dataset.due;paintForm();return}
   if(g('#fUrgent')){form.urgent=!form.urgent;if(form.urgent)form.someday=false;paintForm();return}
   if(g('#fSomeday')){form.someday=!form.someday;if(form.someday)form.urgent=false;paintForm();return}
+  if((el=g('[data-paste]'))){const f=$(el.dataset.paste);
+    if(navigator.clipboard&&navigator.clipboard.readText){navigator.clipboard.readText().then(t=>{f.value=t.trim();saveDraft()}).catch(()=>{f.focus();toast('Tap the box, then tap it again and choose Paste.')})}
+    else{f.focus();toast('Tap the box, then tap it again and choose Paste.')}
+    return}
   if(g('#sGo')){connect();return}
   if(g('#sCancel')){setupMode=false;render();return}
   if(g('#settingsBtn')){setupMode=true;render();window.scrollTo(0,0);return}
 });
 document.addEventListener('change',e=>{if(e.target.id==='fDate'){form.due=e.target.value||'';paintForm()}});
-document.addEventListener('input',e=>{if(e.target.id==='fTitle')grow()});
+function saveDraft(){if($('sUrl'))store.set('todo.draft',{url:$('sUrl').value.trim(),key:$('sKey').value.trim()})}
+document.addEventListener('input',e=>{if(e.target.id==='fTitle')grow();if(e.target.id==='sUrl'||e.target.id==='sKey')saveDraft()});
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&!$('sheetWrap').hidden)closeSheet();
   if(e.key==='Enter'&&e.target.id==='fTitle'){e.preventDefault();saveSheet()}
 });
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){refresh();if($('sheetWrap').hidden)render()}});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cfg&&!setupMode){refresh();if($('sheetWrap').hidden)render()}});
 setInterval(()=>{if($('sheetWrap').hidden&&!setupMode&&tab!=='stats')render()},60000);
 
 render();
