@@ -502,7 +502,14 @@ function paintForm(){
     `<button type="button" class="chip" data-due="" aria-pressed="${!form.due}">No date</button>`+
     `<button type="button" class="chip" data-due="${t}" aria-pressed="${form.due===t}">Today</button>`+
     `<button type="button" class="chip" data-due="${tm}" aria-pressed="${form.due===tm}">Tomorrow</button>`+
-    `<label class="chip${custom?' on':''}">${custom?dayLabel(form.due):'Pick a date'}<input type="date" id="fDate" value="${custom?form.due:''}" aria-label="Pick a due date"></label>`;
+    `<label class="chip${custom?' on':''}" id="fDateChip"><span id="fDateTxt">${custom?dayLabel(form.due):'Pick a date'}</span><input type="date" id="fDate" value="${custom?form.due:''}" aria-label="Pick a due date"></label>`;
+}
+// Updates the due-date chips without rebuilding the date box, so the iPhone date picker stays open.
+function syncDue(){
+  const t=todayIso(),tm=addDays(t,1),custom=!!form.due&&form.due!==t&&form.due!==tm;
+  document.querySelectorAll('#fDue [data-due]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.due===(form.due||'')));
+  $('fDateChip').classList.toggle('on',custom);
+  $('fDateTxt').textContent=custom?dayLabel(form.due):'Pick a date';
 }
 function whereFor(p){if(p.someday)return 'Someday';const t=todayIso();return p.urgent||(p.due&&p.due<=t)?'Today':'All'}
 function saveSheet(){
@@ -567,7 +574,8 @@ document.addEventListener('click',e=>{
   if(g('#sCancel')){setupMode=false;render();return}
   if(g('#settingsBtn')){setupMode=true;render();window.scrollTo(0,0);return}
 });
-document.addEventListener('change',e=>{if(e.target.id==='fDate'){form.due=e.target.value||'';paintForm()}});
+function onDate(e){if(e.target.id==='fDate'){form.due=e.target.value||'';syncDue()}}
+document.addEventListener('change',onDate);
 function saveDraft(){if($('sUrl'))store.set('todo.draft',{url:$('sUrl').value.trim(),key:$('sKey').value.trim()})}
 document.addEventListener('input',e=>{if(e.target.id==='fTitle')grow();if(e.target.id==='sUrl'||e.target.id==='sKey')saveDraft()});
 document.addEventListener('keydown',e=>{
