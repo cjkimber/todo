@@ -269,7 +269,10 @@ function isOverdue(t){
   if(t.due&&t.due<todayIso())return true;
   const l=urgentLeft(t);return l!==null&&l<=0;
 }
+const doneToday=x=>x.done&&!!x.completed&&stampDay(x.completed)===todayIso();
+const showOnList=x=>!x.done||doneToday(x);
 function byImportance(a,b){
+  if(a.done!==b.done)return a.done?1:-1;
   if(a.urgent!==b.urgent)return a.urgent?-1:1;
   if(a.urgent&&b.urgent)return urgentLeft(a)-urgentLeft(b);
   const p=(PRI_RANK[a.priority]??1)-(PRI_RANK[b.priority]??1);if(p)return p;
@@ -336,32 +339,35 @@ function row(t,opts){
 }
 function section(title,list,cls,opts){
   if(!list.length)return '';
-  return `<section class="sec ${cls||''}"><h2>${title}<span class="n">${list.length}</span></h2><div class="list">${list.map(t=>row(t,opts)).join('')}</div></section>`;
+  const open=list.filter(x=>!x.done).length;
+  return `<section class="sec ${cls||''}"><h2>${title}<span class="n">${open||'All done'}</span></h2><div class="list">${list.map(t=>row(t,opts)).join('')}</div></section>`;
 }
 function empty(a,b){return `<div class="empty"><strong>${a}</strong><span>${b}</span></div>`}
 const inFilter=()=>filter==='All'?'':` in ${esc(filter)}`;
 
 /* ---------- Views ---------- */
 function viewToday(){
-  const t=todayIso(),act=tasks.filter(x=>!x.done&&!x.someday&&match(x));
+  const t=todayIso(),act=tasks.filter(x=>showOnList(x)&&!x.someday&&match(x));
   const urgent=act.filter(x=>x.urgent).sort(byImportance);
   const late=act.filter(x=>!x.urgent&&x.due&&x.due<t).sort(byImportance);
   const due=act.filter(x=>!x.urgent&&x.due===t).sort(byImportance);
-  const n=urgent.length+late.length+due.length;
+  const shown=urgent.length+late.length+due.length;
+  const n=[...urgent,...late,...due].filter(x=>!x.done).length;
   const date=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-  const body=n?section('Urgent',urgent,'is-urgent')+section('Overdue',late,'is-late')+section('Due today',due)
+  const body=shown?section('Urgent',urgent,'is-urgent')+section('Overdue',late,'is-late')+section('Due today',due)
     :empty(`Nothing urgent or due today${inFilter()}.`,'Tap + to add a task, or check All for everything else.');
   return head('Today',`${date}. ${n?n+' to do':'All clear'}.`)+filterChips()+body;
 }
 function viewAll(){
-  const act=tasks.filter(x=>!x.done&&!x.someday&&match(x));
+  const act=tasks.filter(x=>showOnList(x)&&!x.someday&&match(x));
+  const openN=act.filter(x=>!x.done).length;
   const by=p=>act.filter(x=>!x.urgent&&(x.priority||'Medium')===p).sort(byImportance);
   const body=act.length?section('Urgent',act.filter(x=>x.urgent).sort(byImportance),'is-urgent')+section('High',by('High'))+section('Medium',by('Medium'))+section('Low',by('Low'))
     :empty(`No open tasks${inFilter()}.`,'Tap + to add one.');
-  return head('All tasks',`${act.length} open${inFilter()}.`)+filterChips()+body;
+  return head('All tasks',`${openN} open${inFilter()}.`)+filterChips()+body;
 }
 function viewSomeday(){
-  const list=tasks.filter(x=>!x.done&&x.someday&&match(x)).sort((a,b)=>String(b.created).localeCompare(String(a.created)));
+  const list=tasks.filter(x=>showOnList(x)&&x.someday&&match(x)).sort((a,b)=>(a.done-b.done)||String(b.created).localeCompare(String(a.created)));
   const body=list.length?`<section class="sec"><div class="list">${list.map(t=>row(t)).join('')}</div></section>`
     :empty(`No ideas parked${inFilter()}.`,'When you add a task, switch on Someday to keep it here until you’re ready.');
   return head('Someday','Ideas for later. Open one and switch off Someday to move it onto your list.')+filterChips()+body;
@@ -468,8 +474,7 @@ function toggleDone(id,el){
   const done=!t.done;
   t.done=done;t.completed=done?new Date().toISOString():'';
   save();sync('setDone',{id,done});
-  if(done&&el&&!reduceMotion){el.classList.add('is-done','ticking');setTimeout(render,550)}else render();
-  if(done)toast('Done',{label:'Undo',fn:()=>toggleDone(id)});
+  if(done&&el&&!reduceMotion){el.classList.add('is-done','ticking');setTimeout(render,450)}else render();
 }
 
 /* ---------- Add / edit sheet ---------- */
